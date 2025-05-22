@@ -21,3 +21,4 @@ futures-util = "0.3.31"
 uuid = { version = "1.16.0", features = ["v4"] }
 dotenvy = "0.15.7"
 rust_decimal = { version = "1.37.1", features = ["serde"] }
+actix-cors = "0.7.1"

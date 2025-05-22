@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use dotenvy::dotenv;
 use log::info;
@@ -35,6 +36,17 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .route("/authorize", web::post().to(authorize))
                     .route("/purchase", web::post().to(purchase)),
+            )
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allowed_methods(vec!["GET", "POST", "PUT", "PATCH", "DELETE"])
+                    .allowed_headers(vec![
+                        actix_web::http::header::AUTHORIZATION,
+                        actix_web::http::header::ACCEPT,
+                        actix_web::http::header::CONTENT_TYPE,
+                    ])
+                    .max_age(3600),
             )
             // Add a health check endpoint
             .route(
