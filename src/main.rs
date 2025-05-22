@@ -19,7 +19,7 @@ async fn main() -> std::io::Result<()> {
     // Get configuration from environment
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
     let port = std::env::var("PORT")
-        .unwrap_or_else(|_| "80".to_string())
+        .unwrap_or_else(|_| "8080".to_string())
         .parse::<u16>()
         .expect("PORT must be a number");
 
