@@ -7,7 +7,7 @@ mod api;
 mod models;
 mod services;
 
-use api::plexo_controller::{authorize, purchase};
+use api::plexo_controller::{authorize, purchase, status};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -31,12 +31,6 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .wrap(middleware::Logger::default())
-            // Register API routes
-            .service(
-                web::scope("/api")
-                    .route("/authorize", web::post().to(authorize))
-                    .route("/purchase", web::post().to(purchase)),
-            )
             .wrap(
                 Cors::default()
                     .allow_any_origin()
@@ -47,6 +41,13 @@ async fn main() -> std::io::Result<()> {
                         actix_web::http::header::CONTENT_TYPE,
                     ])
                     .max_age(3600),
+            )
+            // Register API routes
+            .service(
+                web::scope("/api")
+                    .route("/authorize", web::post().to(authorize))
+                    .route("/purchase", web::post().to(purchase))
+                    .route("/status", web::post().to(status)),
             )
             // Add a health check endpoint
             .route(

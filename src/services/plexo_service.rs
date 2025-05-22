@@ -1,5 +1,5 @@
 use crate::models::common::LosslessNumber;
-use crate::models::requests::{AuthorizationRequest, PaymentRequest};
+use crate::models::requests::{AuthorizationRequest, PaymentRequest, StatusRequest};
 use crate::services::crypto::{get_crypto_service, CryptoError};
 use log::{error, info};
 use reqwest::Client;
@@ -9,6 +9,8 @@ use thiserror::Error;
 const PLEXO_AUTH_URL: &str = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
 const PLEXO_PURCHASE_URL: &str =
     "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Purchase";
+const PLEXO_STATUS_URL: &str =
+    "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Status";
 
 #[derive(Error, Debug)]
 pub enum PlexoServiceError {
@@ -71,6 +73,36 @@ pub async fn send_payment_request(
     let client = Client::new();
     let response = client
         .post(PLEXO_PURCHASE_URL)
+        .json(&signed_payload)
+        .send()
+        .await?
+        .json::<Value>()
+        .await?;
+
+    info!("Received payment response from Plexo");
+
+    Ok(response)
+}
+
+pub async fn send_status_request(
+    status_request: StatusRequest,
+) -> Result<Value, PlexoServiceError> {
+    // Convert request to Value and remove null values before signing
+    let mut request_value = json!(status_request);
+    clean_nulls(&mut request_value);
+    println!("signed_payload");
+    println!("signed_payload: {:#?}", request_value);
+
+    // Sign the payload
+    let crypto_service = get_crypto_service()?;
+    let signed_payload = crypto_service.create_signed_payload(&request_value)?;
+
+    info!("Sending payment request to Plexo");
+
+    // Send the request to Plexo
+    let client = Client::new();
+    let response = client
+        .post(PLEXO_STATUS_URL)
         .json(&signed_payload)
         .send()
         .await?

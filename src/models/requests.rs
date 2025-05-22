@@ -87,3 +87,18 @@ pub struct InstrumentData {
     #[serde(flatten)]
     pub additional_data: Option<HashMap<String, serde_json::Value>>,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct StatusRequest {
+    pub client: String,
+    pub request: ReferenceRequest,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "PascalCase")]
+pub struct ReferenceRequest {
+    #[serde(rename = "Type")]
+    pub reference_type: i32,
+    pub meta_reference: String,
+}
