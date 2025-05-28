@@ -50,7 +50,7 @@ pub async fn send_authorization_request(
 
     info!("Received authorization response from Plexo");
 
-    println!("response: {:#?}", response);
+    println!("signed payload response: {:#?}", response);
 
     Ok(response)
 }
@@ -61,7 +61,7 @@ pub async fn send_payment_request(
     // Convert request to Value and remove null values before signing
     let mut request_value = json!(payment_request);
     clean_nulls(&mut request_value);
-    println!("signed_payload: {:#?}", request_value);
+    println!("payment request: {:#?}", request_value);
 
     // Sign the payload
     let crypto_service = get_crypto_service()?;
@@ -81,7 +81,7 @@ pub async fn send_payment_request(
 
     info!("Received payment response from Plexo");
 
-    println!("response: {:#?}", response);
+    println!("payment request response: {:#?}", response);
 
     Ok(response)
 }
@@ -92,7 +92,7 @@ pub async fn send_status_request(
     // Convert request to Value and remove null values before signing
     let mut request_value = json!(status_request);
     clean_nulls(&mut request_value);
-    println!("signed_payload: {:#?}", request_value);
+    println!("status request: {:#?}", request_value);
 
     // Sign the payload
     let crypto_service = get_crypto_service()?;
@@ -112,7 +112,7 @@ pub async fn send_status_request(
 
     info!("Received payment response from Plexo");
 
-    println!("response: {:#?}", response);
+    println!("status request response: {:#?}", response);
 
     Ok(response)
 }
