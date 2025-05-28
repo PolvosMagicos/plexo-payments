@@ -35,7 +35,7 @@ async fn main() -> std::io::Result<()> {
     // Initialize services
     services::crypto::init().expect("Failed to initialize crypto service");
 
-    let auth_config = ServiceAuthConfig::new(secret_key, "my-service")
+    let auth_config = ServiceAuthConfig::new(secret_key, &service_name)
         .with_rate_limit(100, 60)
         .with_header_name(&header_name)
         .unwrap();
