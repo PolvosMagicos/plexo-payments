@@ -1,10 +1,11 @@
 use std::time::Duration;
 
-use crate::services::crypto::CryptoError;
+use crate::{models::common::LosslessNumber, services::crypto::CryptoError};
 use once_cell::sync::Lazy;
 use rand::{rng, Rng};
 use reqwest::{Client, StatusCode};
 use serde::Serialize;
+use serde_json::{json, Value};
 use thiserror::Error;
 use tokio::time::sleep;
 
@@ -134,4 +135,58 @@ pub async fn post_with_retry<T: Serialize + ?Sized>(
             }
         }
     }
+}
+
+// Helper function to recursively remove null values from a JSON Value
+// and properly format LosslessNumber fields
+pub fn clean_nulls(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            // Collect keys to remove (can't modify while iterating)
+            let null_keys: Vec<String> = map
+                .iter()
+                .filter_map(|(k, v)| if v.is_null() { Some(k.clone()) } else { None })
+                .collect();
+
+            // Remove null values
+            for key in null_keys {
+                map.remove(&key);
+            }
+
+            // Recursively process remaining values and handle special formatting
+            for (key, v) in map.iter_mut() {
+                // Check if this field should be treated as a LosslessNumber
+                if is_lossless_number_field(key) {
+                    if let Value::String(s) = v {
+                        // Convert string to properly formatted number
+                        let lossless = LosslessNumber::new(s.clone());
+                        let formatted = lossless.format_for_json();
+                        // Try to parse as number for JSON
+                        if let Ok(num) = formatted.parse::<f64>() {
+                            *v = json!(num);
+                        }
+                    }
+                }
+                clean_nulls(v);
+            }
+        }
+        Value::Array(arr) => {
+            // Remove null values from array
+            arr.retain(|item| !item.is_null());
+
+            // Recursively process remaining items
+            for item in arr.iter_mut() {
+                clean_nulls(item);
+            }
+        }
+        _ => {} // Nothing to do for primitive values
+    }
+}
+
+// Helper function to determine if a field should be treated as a LosslessNumber
+fn is_lossless_number_field(field_name: &str) -> bool {
+    matches!(
+        field_name,
+        "BilledAmount" | "TaxedAmount" | "VATAmount" | "Amount" | "LoyaltyProgramAmount"
+    )
 }
