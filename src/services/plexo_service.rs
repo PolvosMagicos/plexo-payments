@@ -1,12 +1,10 @@
-use std::time::Duration;
-
 use crate::models::common::LosslessNumber;
 use crate::models::requests::{AuthorizationRequest, PaymentRequest, StatusRequest};
-use crate::services::crypto::{get_crypto_service, CryptoError};
-use log::{error, info};
-use reqwest::Client;
+use crate::services::crypto::get_crypto_service;
+use crate::services::helpers::post_with_retry;
+use crate::services::helpers::PlexoServiceError;
+use log::info;
 use serde_json::{json, Value};
-use thiserror::Error;
 
 const PLEXO_AUTH_URL: &str = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
 const PLEXO_PURCHASE_URL: &str =
@@ -14,28 +12,13 @@ const PLEXO_PURCHASE_URL: &str =
 const PLEXO_STATUS_URL: &str =
     "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Status";
 
-#[derive(Error, Debug)]
-pub enum PlexoServiceError {
-    #[error("Failed to sign request: {0}")]
-    SigningError(#[from] CryptoError),
-
-    #[error("HTTP request error: {0}")]
-    HttpRequestError(#[from] reqwest::Error),
-
-    #[error("HTTP request timeout")]
-    Timeout,
-
-    #[error("Serialization error: {0}")]
-    SerializationError(#[from] serde_json::Error),
-}
-
 pub async fn send_authorization_request(
     auth_request: AuthorizationRequest,
 ) -> Result<Value, PlexoServiceError> {
     // Convert request to Value and remove null values before signing
     let mut request_value = json!(auth_request);
     clean_nulls(&mut request_value);
-    println!("signed_payload: {:#?}", request_value);
+    println!("signed_payload: {request_value}");
 
     // Sign the payload
     let crypto_service = get_crypto_service()?;
@@ -44,25 +27,12 @@ pub async fn send_authorization_request(
     info!("Sending authorization request to Plexo");
 
     // Send the request to Plexo
-    let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
-    let response = client
-        .post(PLEXO_AUTH_URL)
-        .json(&signed_payload)
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                PlexoServiceError::Timeout
-            } else {
-                PlexoServiceError::HttpRequestError(e)
-            }
-        })?;
-
+    let response = post_with_retry(PLEXO_AUTH_URL, &signed_payload).await?;
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received authorization response from Plexo");
 
-    println!("signed payload response: {:#?}", parsed_response);
+    println!("signed payload response: {parsed_response}");
 
     Ok(parsed_response)
 }
@@ -73,7 +43,7 @@ pub async fn send_payment_request(
     // Convert request to Value and remove null values before signing
     let mut request_value = json!(payment_request);
     clean_nulls(&mut request_value);
-    println!("payment request: {:#?}", request_value);
+    println!("payment request: {request_value}");
 
     // Sign the payload
     let crypto_service = get_crypto_service()?;
@@ -82,25 +52,13 @@ pub async fn send_payment_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
-    let response = client
-        .post(PLEXO_PURCHASE_URL)
-        .json(&signed_payload)
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                PlexoServiceError::Timeout
-            } else {
-                PlexoServiceError::HttpRequestError(e)
-            }
-        })?;
+    let response = post_with_retry(PLEXO_PURCHASE_URL, &signed_payload).await?;
 
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received payment response from Plexo");
 
-    println!("payment request response: {:#?}", parsed_response);
+    println!("payment request response: {parsed_response}");
 
     Ok(parsed_response)
 }
@@ -111,7 +69,7 @@ pub async fn send_status_request(
     // Convert request to Value and remove null values before signing
     let mut request_value = json!(status_request);
     clean_nulls(&mut request_value);
-    println!("status request: {:#?}", request_value);
+    println!("status request: {request_value}");
 
     // Sign the payload
     let crypto_service = get_crypto_service()?;
@@ -120,25 +78,13 @@ pub async fn send_status_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let client = Client::builder().timeout(Duration::from_secs(10)).build()?;
-    let response = client
-        .post(PLEXO_STATUS_URL)
-        .json(&signed_payload)
-        .send()
-        .await
-        .map_err(|e| {
-            if e.is_timeout() {
-                PlexoServiceError::Timeout
-            } else {
-                PlexoServiceError::HttpRequestError(e)
-            }
-        })?;
+    let response = post_with_retry(PLEXO_STATUS_URL, &signed_payload).await?;
 
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received status response from Plexo");
 
-    println!("status request response: {:#?}", parsed_response);
+    println!("status request response: {request_value}");
 
     Ok(parsed_response)
 }

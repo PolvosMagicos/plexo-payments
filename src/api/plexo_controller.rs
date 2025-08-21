@@ -1,6 +1,7 @@
 use crate::models::requests::{AuthorizationRequest, PaymentRequest, StatusRequest};
 use crate::models::responses::ApiResponse;
-use crate::services::plexo_service::{self, PlexoServiceError};
+use crate::services::helpers::PlexoServiceError;
+use crate::services::plexo_service::{self};
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use log::{error, info};
 
@@ -17,7 +18,7 @@ pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<
             }))
         }
         Err(e) => {
-            error!("Error processing authorization request: {:?}", e);
+            error!("Error processing authorization request: {e}");
 
             let status_code = match e {
                 PlexoServiceError::Timeout => actix_web::http::StatusCode::GATEWAY_TIMEOUT,
@@ -28,6 +29,7 @@ pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<
                 PlexoServiceError::SigningError(_) => {
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
                 }
+                PlexoServiceError::HttpStatusError(_) => actix_web::http::StatusCode::BAD_GATEWAY,
             };
 
             Ok(HttpResponse::build(status_code).json(ApiResponse::<()> {
@@ -52,7 +54,7 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
             }))
         }
         Err(e) => {
-            error!("Error processing payment request: {}", e);
+            error!("Error processing payment request: {e}");
 
             let status_code = match e {
                 PlexoServiceError::Timeout => actix_web::http::StatusCode::GATEWAY_TIMEOUT,
@@ -63,6 +65,7 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
                 PlexoServiceError::SigningError(_) => {
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
                 }
+                PlexoServiceError::HttpStatusError(_) => actix_web::http::StatusCode::BAD_GATEWAY,
             };
 
             Ok(HttpResponse::build(status_code).json(ApiResponse::<()> {
@@ -87,7 +90,7 @@ pub async fn status(request: web::Json<StatusRequest>) -> ActixResult<HttpRespon
             }))
         }
         Err(e) => {
-            error!("Error processing status request: {}", e);
+            error!("Error processing status request: {e}");
 
             let status_code = match e {
                 PlexoServiceError::Timeout => actix_web::http::StatusCode::GATEWAY_TIMEOUT,
@@ -98,6 +101,7 @@ pub async fn status(request: web::Json<StatusRequest>) -> ActixResult<HttpRespon
                 PlexoServiceError::SigningError(_) => {
                     actix_web::http::StatusCode::INTERNAL_SERVER_ERROR
                 }
+                PlexoServiceError::HttpStatusError(_) => actix_web::http::StatusCode::BAD_GATEWAY,
             };
 
             Ok(HttpResponse::build(status_code).json(ApiResponse::<()> {
