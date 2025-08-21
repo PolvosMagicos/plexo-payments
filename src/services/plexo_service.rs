@@ -4,6 +4,7 @@ use crate::services::helpers::PlexoServiceError;
 use crate::services::helpers::{clean_nulls, post_with_retry};
 use log::info;
 use serde_json::{json, Value};
+use std::time::Duration;
 
 const PLEXO_AUTH_URL: &str = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
 const PLEXO_PURCHASE_URL: &str =
@@ -26,7 +27,8 @@ pub async fn send_authorization_request(
     info!("Sending authorization request to Plexo");
 
     // Send the request to Plexo
-    let response = post_with_retry(PLEXO_AUTH_URL, &signed_payload).await?;
+    let response =
+        post_with_retry(PLEXO_AUTH_URL, &signed_payload, Duration::from_secs(12)).await?;
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received authorization response from Plexo");
@@ -51,7 +53,8 @@ pub async fn send_payment_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let response = post_with_retry(PLEXO_PURCHASE_URL, &signed_payload).await?;
+    let response =
+        post_with_retry(PLEXO_PURCHASE_URL, &signed_payload, Duration::from_secs(30)).await?;
 
     let parsed_response = response.json::<Value>().await?;
 
@@ -77,7 +80,8 @@ pub async fn send_status_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let response = post_with_retry(PLEXO_STATUS_URL, &signed_payload).await?;
+    let response =
+        post_with_retry(PLEXO_STATUS_URL, &signed_payload, Duration::from_secs(10)).await?;
 
     let parsed_response = response.json::<Value>().await?;
 

@@ -86,6 +86,7 @@ fn backoff_delay_ms(attempt: u32, base_ms: u64, max_ms: u64) -> u64 {
 pub async fn post_with_retry<T: Serialize + ?Sized>(
     url: &str,
     payload: &T,
+    attempt_timeout: Duration,
 ) -> Result<reqwest::Response, PlexoServiceError> {
     let max_retries = env_u32("PLEXO_MAX_RETRIES", 3);
     let base_backoff = env_u64("PLEXO_BACKOFF_BASE_MS", 250);
@@ -95,7 +96,12 @@ pub async fn post_with_retry<T: Serialize + ?Sized>(
     let mut attempt: u32 = 0;
 
     loop {
-        let res = client.post(url).json(payload).send().await;
+        let res = client
+            .post(url)
+            .timeout(attempt_timeout)
+            .json(payload)
+            .send()
+            .await;
 
         match res {
             Ok(rsp) => {
