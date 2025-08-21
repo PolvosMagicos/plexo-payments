@@ -1,13 +1,11 @@
-use crate::models::responses::{ApiResponse, SignedObject, SignedRequest};
+use crate::models::responses::{SignedObject, SignedRequest};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
 use lazy_static::lazy_static;
 use log::{error, info};
 use openssl::hash::MessageDigest;
 use openssl::pkcs12::Pkcs12;
 use openssl::pkey::PKey;
-use openssl::rsa::Rsa;
 use openssl::sign::Signer;
-use openssl::x509::X509;
 use serde_json::{json, Value};
 use std::fs;
 use std::io::Write;
