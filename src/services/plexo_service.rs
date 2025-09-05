@@ -6,11 +6,11 @@ use log::info;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const PLEXO_AUTH_URL: &str = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
+const PLEXO_AUTH_URL: &str = "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
 const PLEXO_PURCHASE_URL: &str =
-    "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Purchase";
+    "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Purchase";
 const PLEXO_STATUS_URL: &str =
-    "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Status";
+    "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Status";
 
 pub async fn send_authorization_request(
     auth_request: AuthorizationRequest,
