@@ -6,11 +6,33 @@ use log::info;
 use serde_json::{json, Value};
 use std::time::Duration;
 
-const PLEXO_AUTH_URL: &str = "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Auth";
-const PLEXO_PURCHASE_URL: &str =
-    "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Purchase";
-const PLEXO_STATUS_URL: &str =
-    "https://plexo.com.uy:4043/SecurePaymentGateway.svc/Operation/Status";
+use once_cell::sync::Lazy;
+
+fn join(base: &str, path: &str) -> String {
+    format!(
+        "{}/{}",
+        base.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    )
+}
+
+pub static PLEXO_BASE_URL: Lazy<String> = Lazy::new(|| {
+    std::env::var("PLEXO_BASE_URL")
+        .expect("PLEXO_BASE_URL environment variable is required (e.g. https://plexo.com.uy:4043)")
+});
+
+pub static PLEXO_AUTH_URL: Lazy<String> =
+    Lazy::new(|| join(&PLEXO_BASE_URL, "SecurePaymentGateway.svc/Auth"));
+
+pub static PLEXO_PURCHASE_URL: Lazy<String> = Lazy::new(|| {
+    join(
+        &PLEXO_BASE_URL,
+        "SecurePaymentGateway.svc/Operation/Purchase",
+    )
+});
+
+pub static PLEXO_STATUS_URL: Lazy<String> =
+    Lazy::new(|| join(&PLEXO_BASE_URL, "SecurePaymentGateway.svc/Operation/Status"));
 
 pub async fn send_authorization_request(
     auth_request: AuthorizationRequest,
@@ -28,7 +50,7 @@ pub async fn send_authorization_request(
 
     // Send the request to Plexo
     let response =
-        post_with_retry(PLEXO_AUTH_URL, &signed_payload, Duration::from_secs(12)).await?;
+        post_with_retry(&PLEXO_AUTH_URL, &signed_payload, Duration::from_secs(12)).await?;
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received authorization response from Plexo");
@@ -53,8 +75,12 @@ pub async fn send_payment_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let response =
-        post_with_retry(PLEXO_PURCHASE_URL, &signed_payload, Duration::from_secs(30)).await?;
+    let response = post_with_retry(
+        &PLEXO_PURCHASE_URL,
+        &signed_payload,
+        Duration::from_secs(30),
+    )
+    .await?;
 
     let parsed_response = response.json::<Value>().await?;
 
@@ -81,7 +107,7 @@ pub async fn send_status_request(
 
     // Send the request to Plexo
     let response =
-        post_with_retry(PLEXO_STATUS_URL, &signed_payload, Duration::from_secs(10)).await?;
+        post_with_retry(&PLEXO_STATUS_URL, &signed_payload, Duration::from_secs(10)).await?;
 
     let parsed_response = response.json::<Value>().await?;
 
