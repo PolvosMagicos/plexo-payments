@@ -29,7 +29,7 @@ pub enum PlexoServiceError {
 
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     let connect_timeout = env_duration("PLEXO_CONNECT_TIMEOUT_MS", 5_000);
-    let request_timeout = env_duration("PLEXO_REQUEST_TIMEOUT_MS", 10_000);
+    let request_timeout = env_duration("PLEXO_REQUEST_TIMEOUT_MS", 20_000);
     let tcp_keepalive = env_duration("PLEXO_TCP_KEEPALIVE_MS", 30_000);
 
     Client::builder()
