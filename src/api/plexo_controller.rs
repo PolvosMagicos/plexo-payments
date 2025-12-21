@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use crate::models::requests::{
     AuthorizationRequest, PaymentRequest, ReferenceRequest, ReferenceType, StatusRequest,
 };
@@ -9,6 +11,7 @@ use crate::services::helpers::{
 use crate::services::plexo_service::{self};
 use actix_web::{web, HttpResponse, Result as ActixResult};
 use log::{error, info};
+use tokio::time::timeout;
 
 pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<HttpResponse> {
     info!("Received authorization request");
@@ -55,8 +58,14 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
     let meta_reference = payment_req.Request.ClientReferenceId.clone();
     let client_name = payment_req.Client.clone(); // grab before moving payment_req
 
-    match plexo_service::send_payment_request(payment_req).await {
-        Ok(raw_purchase) => {
+    let purchase_res = timeout(
+        Duration::from_secs(12),
+        plexo_service::send_payment_request(payment_req),
+    )
+    .await;
+
+    match purchase_res {
+        Ok(Ok(raw_purchase)) => {
             debug_purchase_status(&raw_purchase);
             let st = extract_purchase_status(&raw_purchase);
 
@@ -84,7 +93,7 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
             debug_outgoing_response("purchase OK", &resp);
             Ok(HttpResponse::Ok().json(resp))
         }
-        Err(e) => {
+        Ok(Err(e)) => {
             error!("Error processing payment request: {e}");
 
             // 2) If ambiguous => fallback to status
@@ -178,6 +187,68 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
 
                 debug_outgoing_response("purchase FAILED non-ambiguous", &resp);
                 Ok(HttpResponse::build(status_code).json(resp))
+            }
+        }
+        Err(_) => {
+            // ⬅️ HARD TIMEOUT HIT => force fallback
+            println!("⏱ purchase timed out at controller level, forcing status fallback");
+
+            let status_req = StatusRequest {
+                client: client_name,
+                request: ReferenceRequest {
+                    reference_type: ReferenceType::ClientPurchaseReferenceId,
+                    meta_reference,
+                },
+            };
+
+            match plexo_service::send_status_request(status_req).await {
+                Ok(raw_status) => {
+                    let st = extract_purchase_status(&raw_status);
+
+                    let outcome = match st {
+                        Some(0) => PurchaseOutcome::Approved {
+                            source: "status",
+                            raw: raw_status,
+                        },
+                        Some(_) => PurchaseOutcome::Declined {
+                            source: "status",
+                            raw: raw_status,
+                        },
+                        None => PurchaseOutcome::Pending {
+                            source: "status",
+                            raw: raw_status,
+                        },
+                    };
+
+                    let mut http = match outcome {
+                        PurchaseOutcome::Pending { .. } => HttpResponse::Accepted(),
+                        _ => HttpResponse::Ok(),
+                    };
+
+                    let resp = ApiResponse {
+                        success: true,
+                        data: Some(outcome),
+                        error: None,
+                    };
+                    debug_outgoing_response("status fallback after timeout OK", &resp);
+
+                    Ok(http.json(resp))
+                }
+                Err(se) => {
+                    error!("Status fallback after timeout failed: {se}");
+
+                    let resp: ApiResponse<PurchaseOutcome> = ApiResponse {
+                        success: false,
+                        data: Some(PurchaseOutcome::Unknown {
+                            source: "purchase",
+                            error: format!("purchase timed out; status fallback failed ({se})"),
+                        }),
+                        error: Some("Gateway timeout".to_string()),
+                    };
+                    debug_outgoing_response("status fallback after timeout FAILED", &resp);
+
+                    Ok(HttpResponse::GatewayTimeout().json(resp))
+                }
             }
         }
     }
