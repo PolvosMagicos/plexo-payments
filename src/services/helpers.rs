@@ -7,7 +7,7 @@ use reqwest::{Client, StatusCode};
 use serde::Serialize;
 use serde_json::{json, Value};
 use thiserror::Error;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 pub const PURCHASE_STATUS_PTR: &str = "/Object/Object/Response/Transactions/Purchase/Status";
 
@@ -43,13 +43,11 @@ pub enum PurchaseOutcome {
 
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     let connect_timeout = env_duration("PLEXO_CONNECT_TIMEOUT_MS", 5_000);
-    let request_timeout = env_duration("PLEXO_REQUEST_TIMEOUT_MS", 20_000);
     let tcp_keepalive = env_duration("PLEXO_TCP_KEEPALIVE_MS", 30_000);
 
     Client::builder()
         .http1_only() // WCF .svc endpoints can be flaky on HTTP/2
         .connect_timeout(connect_timeout)
-        .timeout(request_timeout)
         .tcp_keepalive(Some(tcp_keepalive))
         .pool_max_idle_per_host(8)
         .build()
@@ -100,7 +98,7 @@ fn backoff_delay_ms(attempt: u32, base_ms: u64, max_ms: u64) -> u64 {
 pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
     url: &str,
     payload: &T,
-    _attempt_timeout: Duration,
+    attempt_timeout: Duration,
     max_retries: u32,
 ) -> Result<reqwest::Response, PlexoServiceError> {
     let base_backoff = env_u64("PLEXO_BACKOFF_BASE_MS", 250);
@@ -119,14 +117,22 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
         println!("[HTTP] request built");
 
         let fut = req.send();
-        println!("[HTTP] send() future created");
+        println!(
+            "[HTTP] send() future created; hard timeout={:?}",
+            attempt_timeout
+        );
 
-        let res = fut.await;
+        // ✅ HARD timeout around send()
+        let res = timeout(attempt_timeout, fut)
+            .await
+            .map_err(|_| PlexoServiceError::Timeout)?;
+
         println!("[HTTP] send() future resolved");
 
         match res {
             Ok(rsp) => {
                 println!("[HTTP] response headers received, status={}", rsp.status());
+
                 let status = rsp.status();
                 if status.is_success() {
                     return Ok(rsp);
@@ -135,6 +141,7 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
                 if attempt < max_retries && should_retry_status(status) {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt, base_backoff, max_backoff);
+                    println!("[HTTP] retryable status={}, sleeping {}ms", status, delay);
                     sleep(Duration::from_millis(delay)).await;
                     continue;
                 }
@@ -150,6 +157,7 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
                 if attempt < max_retries && (is_timeout || retryable) {
                     attempt += 1;
                     let delay = backoff_delay_ms(attempt, base_backoff, max_backoff);
+                    println!("[HTTP] retryable error, sleeping {}ms", delay);
                     sleep(Duration::from_millis(delay)).await;
                     continue;
                 }
