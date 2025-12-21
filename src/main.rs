@@ -13,12 +13,7 @@ mod services;
 use api::plexo_controller::{authorize, purchase, status};
 use services::middleware::{ServiceAuthConfig, ServiceAuthMiddleware};
 
-use crate::api::plexo_controller::health;
-
-#[derive(Clone)]
-pub struct AppState {
-    pub started_at: Instant,
-}
+use crate::api::plexo_controller::{health, AppState};
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
