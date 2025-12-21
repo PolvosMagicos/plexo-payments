@@ -56,6 +56,10 @@ pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<
 }
 
 pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpResponse> {
+    println!(
+        "tokio runtime? {}",
+        tokio::runtime::Handle::try_current().is_ok()
+    );
     info!("Received payment request");
 
     let payment_req = request.into_inner();
