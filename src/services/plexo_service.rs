@@ -63,27 +63,25 @@ pub async fn send_authorization_request(
 pub async fn send_payment_request(
     payment_request: PaymentRequest,
 ) -> Result<Value, PlexoServiceError> {
-    // Convert request to Value and remove null values before signing
     let mut request_value = json!(payment_request);
     clean_nulls(&mut request_value);
     println!("payment request: {request_value}");
 
-    // Sign the payload
     let crypto_service = get_crypto_service()?;
     let signed_payload = crypto_service.create_signed_payload(&request_value)?;
 
-    info!("Sending payment request to Plexo");
-
-    // Send the request to Plexo
+    println!("-> calling send() purchase");
     let response =
         post_no_retry(&PLEXO_PURCHASE_URL, &signed_payload, Duration::from_secs(8)).await?;
+    println!("<- send() returned. status={}", response.status());
 
-    let parsed_response = response.json::<Value>().await?;
-
-    info!("Received payment response from Plexo");
+    println!("-> reading json body()");
+    let parsed_response = tokio::time::timeout(Duration::from_secs(3), response.json::<Value>())
+        .await
+        .map_err(|_| PlexoServiceError::Timeout)??;
+    println!("<- json body read OK");
 
     println!("payment request response: {parsed_response}");
-
     Ok(parsed_response)
 }
 

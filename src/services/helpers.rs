@@ -131,6 +131,9 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
                 return Err(PlexoServiceError::HttpStatusError(status));
             }
             Err(e) => {
+                println!("error status: ");
+                println!("{e}");
+
                 let is_timeout = e.is_timeout();
                 let retryable = should_retry_error(&e);
 
