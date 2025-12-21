@@ -1,6 +1,7 @@
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use dotenvy::dotenv;
+use env_logger::Target;
 use log::info;
 
 mod api;
@@ -13,7 +14,9 @@ use services::middleware::{ServiceAuthConfig, ServiceAuthMiddleware};
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize logger
-    env_logger::init_from_env(env_logger::Env::default().default_filter_or("info"));
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .target(Target::Stdout)
+        .init();
     // Load .env file
     dotenv().ok();
     let secret_key =
@@ -68,6 +71,7 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(|| async { HttpResponse::Ok().body("Service is running") }),
             )
     })
+    .workers(4)
     .bind((host, port))?
     .run()
     .await
