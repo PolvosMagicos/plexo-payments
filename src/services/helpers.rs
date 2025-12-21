@@ -1,6 +1,14 @@
 use std::time::Duration;
 
-use crate::{models::common::LosslessNumber, services::crypto::CryptoError};
+use crate::{
+    models::{
+        common::LosslessNumber,
+        requests::{ReferenceRequest, ReferenceType, StatusRequest},
+        responses::ApiResponse,
+    },
+    services::{crypto::CryptoError, plexo_service},
+};
+use actix_web::HttpResponse;
 use once_cell::sync::Lazy;
 use rand::{rng, Rng};
 use reqwest::{Client, StatusCode};
@@ -43,14 +51,14 @@ pub enum PurchaseOutcome {
 
 static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     let connect_timeout = env_duration("PLEXO_CONNECT_TIMEOUT_MS", 5_000);
-    let tcp_keepalive = env_duration("PLEXO_TCP_KEEPALIVE_MS", 30_000);
 
     Client::builder()
         .use_rustls_tls()
         .http1_only() // WCF .svc endpoints can be flaky on HTTP/2
         .connect_timeout(connect_timeout)
-        .tcp_keepalive(Some(tcp_keepalive))
         .pool_max_idle_per_host(0)
+        .pool_idle_timeout(None)
+        .tcp_keepalive(None)
         .no_proxy()
         .build()
         .expect("failed to build reqwest client")
@@ -118,6 +126,7 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
         let req = client
             .post(url)
             .json(payload)
+            .timeout(attempt_timeout)
             .header("Connection", "close")
             .header("Accept-Encoding", "identity");
         println!("[HTTP] request built");
@@ -304,4 +313,49 @@ pub fn debug_outgoing_response<T: Serialize>(label: &str, body: &T) {
         Ok(pretty) => println!("📤 Outgoing response ({label}):\n{pretty}"),
         Err(e) => println!("📤 Outgoing response ({label}) - failed to serialize: {e}"),
     }
+}
+
+pub async fn fallback_status(
+    client_name: String,
+    meta_reference: String,
+) -> Result<HttpResponse, PlexoServiceError> {
+    let status_req = StatusRequest {
+        client: client_name,
+        request: ReferenceRequest {
+            reference_type: ReferenceType::ClientPurchaseReferenceId,
+            meta_reference,
+        },
+    };
+
+    let raw_status = plexo_service::send_status_request(status_req).await?;
+
+    let st = extract_purchase_status(&raw_status);
+
+    let outcome = match st {
+        Some(0) => PurchaseOutcome::Approved {
+            source: "status",
+            raw: raw_status,
+        },
+        Some(_) => PurchaseOutcome::Declined {
+            source: "status",
+            raw: raw_status,
+        },
+        None => PurchaseOutcome::Pending {
+            source: "status",
+            raw: raw_status,
+        },
+    };
+
+    let resp = ApiResponse {
+        success: true,
+        data: Some(outcome),
+        error: None,
+    };
+
+    let response = match resp.data.as_ref() {
+        Some(PurchaseOutcome::Pending { .. }) => HttpResponse::Accepted().json(resp),
+        _ => HttpResponse::Ok().json(resp),
+    };
+
+    Ok(response)
 }
