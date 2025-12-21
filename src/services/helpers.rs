@@ -27,6 +27,9 @@ pub enum PlexoServiceError {
 
     #[error("Serialization error: {0}")]
     SerializationError(#[from] serde_json::Error),
+
+    #[error("Task join error: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
 }
 
 #[derive(Serialize)]
