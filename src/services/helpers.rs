@@ -253,7 +253,7 @@ pub fn extract_purchase_status(v: &Value) -> Option<i64> {
 
 pub fn debug_purchase_status(v: &Value) {
     // 1) Print full JSON response
-    match serde_json::to_string_pretty(v) {
+    match serde_json::to_string(v) {
         Ok(pretty) => println!("🔎 Full purchase response:\n{pretty}"),
         Err(_) => println!("🔎 Full purchase response (raw): {v}"),
     }
