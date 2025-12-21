@@ -99,6 +99,17 @@ pub struct StatusRequest {
 #[serde(rename_all = "PascalCase")]
 pub struct ReferenceRequest {
     #[serde(rename = "Type")]
-    pub reference_type: i32,
+    pub reference_type: ReferenceType,
     pub meta_reference: String,
+}
+
+#[allow(clippy::enum_variant_names)]
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum ReferenceType {
+    PlexoTransactionId = 0,
+    ClientPurchaseReferenceId = 1,
+    ClientCancelReferenceId = 2,
+    ClientReserveReferenceId = 3,
+    ClientRefundReferenceId = 4,
 }

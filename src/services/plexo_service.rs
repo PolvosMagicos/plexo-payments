@@ -1,7 +1,7 @@
 use crate::models::requests::{AuthorizationRequest, PaymentRequest, StatusRequest};
 use crate::services::crypto::get_crypto_service;
-use crate::services::helpers::PlexoServiceError;
 use crate::services::helpers::{clean_nulls, post_with_retry};
+use crate::services::helpers::{post_no_retry, PlexoServiceError};
 use log::info;
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -50,7 +50,7 @@ pub async fn send_authorization_request(
 
     // Send the request to Plexo
     let response =
-        post_with_retry(&PLEXO_AUTH_URL, &signed_payload, Duration::from_secs(12)).await?;
+        post_with_retry(&PLEXO_AUTH_URL, &signed_payload, Duration::from_secs(5)).await?;
     let parsed_response = response.json::<Value>().await?;
 
     info!("Received authorization response from Plexo");
@@ -75,12 +75,8 @@ pub async fn send_payment_request(
     info!("Sending payment request to Plexo");
 
     // Send the request to Plexo
-    let response = post_with_retry(
-        &PLEXO_PURCHASE_URL,
-        &signed_payload,
-        Duration::from_secs(30),
-    )
-    .await?;
+    let response =
+        post_no_retry(&PLEXO_PURCHASE_URL, &signed_payload, Duration::from_secs(8)).await?;
 
     let parsed_response = response.json::<Value>().await?;
 
