@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use actix_cors::Cors;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use dotenvy::dotenv;
@@ -12,6 +14,11 @@ use api::plexo_controller::{authorize, purchase, status};
 use services::middleware::{ServiceAuthConfig, ServiceAuthMiddleware};
 
 use crate::api::plexo_controller::health;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub started_at: Instant,
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -45,8 +52,13 @@ async fn main() -> std::io::Result<()> {
         .with_header_name(&header_name)
         .unwrap();
 
+    let app_state = AppState {
+        started_at: Instant::now(),
+    };
+
     HttpServer::new(move || {
         App::new()
+            .app_data(web::Data::new(app_state.clone()))
             .wrap(ServiceAuthMiddleware::new(auth_config.clone()))
             .wrap(middleware::Logger::default())
             .wrap(
@@ -66,7 +78,7 @@ async fn main() -> std::io::Result<()> {
                     .route("/authorize", web::post().to(authorize))
                     .route("/purchase", web::post().to(purchase))
                     .route("/status", web::post().to(status))
-                    .route("/health", web::post().to(health)),
+                    .route("/health", web::get().to(health)),
             )
             // Add a health check endpoint
             .route(
