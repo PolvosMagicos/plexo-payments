@@ -51,6 +51,7 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
         .connect_timeout(connect_timeout)
         .tcp_keepalive(Some(tcp_keepalive))
         .pool_max_idle_per_host(0)
+        .no_proxy()
         .build()
         .expect("failed to build reqwest client")
 });
@@ -114,7 +115,11 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
             attempt, url
         );
 
-        let req = client.post(url).json(payload);
+        let req = client
+            .post(url)
+            .json(payload)
+            .header("Connection", "close")
+            .header("Accept-Encoding", "identity");
         println!("[HTTP] request built");
 
         let fut = req.send();
