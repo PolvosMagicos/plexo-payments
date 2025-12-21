@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::models::requests::{AuthorizationRequest, PaymentRequest, StatusRequest};
 use crate::models::responses::ApiResponse;
@@ -7,11 +7,28 @@ use crate::services::helpers::{
     is_ambiguous, PlexoServiceError, PurchaseOutcome,
 };
 use crate::services::plexo_service::{self};
-use actix_web::{web, HttpResponse, Result as ActixResult};
+use actix_web::{web, HttpResponse, Responder, Result as ActixResult};
 use log::{error, info};
-use serde_json::Value;
-use tokio::sync::oneshot;
+use serde::Serialize;
+use tokio::net::TcpStream;
 use tokio::time::timeout;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub started_at: Instant,
+}
+
+#[derive(Serialize)]
+struct HealthResponse {
+    ok: bool,
+    service: &'static str,
+    timestamp_utc: String,
+    uptime_secs: u64,
+    version: &'static str,
+
+    plexo_tcp_ok: Option<bool>,
+    plexo_tcp_error: Option<String>,
+}
 
 pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<HttpResponse> {
     info!("Received authorization request");
@@ -59,25 +76,12 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
 
     let payment_req = request.into_inner();
 
-    // MetaReference = order id (ClientReferenceId)
     let meta_reference = payment_req.Request.ClientReferenceId.clone();
     let client_name = payment_req.Client.clone();
 
-    // Spawn purchase work and return result through a channel
-    let (tx, rx) = oneshot::channel::<Result<Value, PlexoServiceError>>();
-
-    tokio::spawn(async move {
-        let res = plexo_service::send_payment_request(payment_req).await;
-        let _ = tx.send(res); // ignore if receiver dropped
-    });
-
-    // Hard upper bound for "purchase" from the controller perspective.
-    // Even if reqwest wedges, you will still respond.
-    let purchase_res = timeout(Duration::from_secs(12), rx).await;
-
-    match purchase_res {
-        // purchase finished in time
-        Ok(Ok(Ok(raw_purchase))) => {
+    // ✅ NO spawn, NO oneshot
+    match plexo_service::send_payment_request(payment_req).await {
+        Ok(raw_purchase) => {
             debug_purchase_status(&raw_purchase);
             let st = extract_purchase_status(&raw_purchase);
 
@@ -101,36 +105,33 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
                 data: Some(outcome),
                 error: None,
             };
-
             debug_outgoing_response("purchase OK", &resp);
             Ok(HttpResponse::Ok().json(resp))
         }
 
-        // purchase returned an error in time
-        Ok(Ok(Err(e))) => {
+        Err(e) => {
             error!("Error processing payment request: {e}");
 
-            // Ambiguous => fallback to status
+            // ✅ Timeouts / connect / 502 / etc should be treated as ambiguous -> fallback
             if is_ambiguous(&e) {
                 match fallback_status(client_name, meta_reference).await {
                     Ok(response) => Ok(response),
                     Err(se) => {
                         error!("Status fallback failed: {se}");
-
                         let resp: ApiResponse<PurchaseOutcome> = ApiResponse {
                             success: false,
                             data: Some(PurchaseOutcome::Unknown {
                                 source: "purchase",
-                                error: format!("purchase timed out; status fallback failed ({se})"),
+                                error: format!(
+                                    "purchase failed ({e}); status fallback failed ({se})"
+                                ),
                             }),
                             error: Some("Gateway timeout".to_string()),
                         };
-
                         Ok(HttpResponse::GatewayTimeout().json(resp))
                     }
                 }
             } else {
-                // Non-ambiguous => return error as before
                 let status_code = match e {
                     PlexoServiceError::Timeout => actix_web::http::StatusCode::GATEWAY_TIMEOUT,
                     PlexoServiceError::HttpRequestError(_) => {
@@ -153,55 +154,8 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
                     data: None,
                     error: Some(e.to_string()),
                 };
-
                 debug_outgoing_response("purchase FAILED non-ambiguous", &resp);
                 Ok(HttpResponse::build(status_code).json(resp))
-            }
-        }
-
-        // channel dropped (task panicked) => treat as ambiguous and fallback
-        Ok(Err(_recv_closed)) => {
-            error!("Purchase task dropped (oneshot receiver closed) -> fallback to status");
-
-            match fallback_status(client_name, meta_reference).await {
-                Ok(response) => Ok(response),
-                Err(se) => {
-                    error!("Status fallback failed: {se}");
-
-                    let resp: ApiResponse<PurchaseOutcome> = ApiResponse {
-                        success: false,
-                        data: Some(PurchaseOutcome::Unknown {
-                            source: "purchase",
-                            error: format!("purchase timed out; status fallback failed ({se})"),
-                        }),
-                        error: Some("Gateway timeout".to_string()),
-                    };
-
-                    Ok(HttpResponse::GatewayTimeout().json(resp))
-                }
-            }
-        }
-
-        // controller-level timeout => fallback to status immediately
-        Err(_elapsed) => {
-            error!("⏱ purchase timed out at controller level -> fallback to status");
-
-            match fallback_status(client_name, meta_reference).await {
-                Ok(response) => Ok(response),
-                Err(se) => {
-                    error!("Status fallback failed: {se}");
-
-                    let resp: ApiResponse<PurchaseOutcome> = ApiResponse {
-                        success: false,
-                        data: Some(PurchaseOutcome::Unknown {
-                            source: "purchase",
-                            error: format!("purchase timed out; status fallback failed ({se})"),
-                        }),
-                        error: Some("Gateway timeout".to_string()),
-                    };
-
-                    Ok(HttpResponse::GatewayTimeout().json(resp))
-                }
             }
         }
     }
@@ -246,4 +200,36 @@ pub async fn status(request: web::Json<StatusRequest>) -> ActixResult<HttpRespon
             }))
         }
     }
+}
+
+pub async fn health(state: web::Data<AppState>) -> impl Responder {
+    let uptime = state.started_at.elapsed().as_secs();
+
+    let plexo_host =
+        std::env::var("PLEXO_BASE_URL").unwrap_or_else(|_| "testing.plexo.com.uy".to_string());
+    let plexo_port: u16 = std::env::var("PLEXO_PORT")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4043);
+
+    let addr = format!("{plexo_host}:{plexo_port}");
+
+    // ✅ async tcp connect + timeout
+    let plexo_check = timeout(Duration::from_secs(2), TcpStream::connect(&addr)).await;
+
+    let (plexo_tcp_ok, plexo_tcp_error) = match plexo_check {
+        Ok(Ok(_sock)) => (Some(true), None),
+        Ok(Err(e)) => (Some(false), Some(format!("tcp connect error: {e}"))),
+        Err(_) => (Some(false), Some("tcp connect timeout".to_string())),
+    };
+
+    HttpResponse::Ok().json(HealthResponse {
+        ok: true,
+        service: "plexo-back",
+        timestamp_utc: chrono::Utc::now().to_rfc3339(),
+        uptime_secs: uptime,
+        version: env!("CARGO_PKG_VERSION"),
+        plexo_tcp_ok,
+        plexo_tcp_error,
+    })
 }

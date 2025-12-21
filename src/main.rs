@@ -11,6 +11,8 @@ mod services;
 use api::plexo_controller::{authorize, purchase, status};
 use services::middleware::{ServiceAuthConfig, ServiceAuthMiddleware};
 
+use crate::api::plexo_controller::health;
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     // Initialize logger
@@ -63,7 +65,8 @@ async fn main() -> std::io::Result<()> {
                 web::scope("/api")
                     .route("/authorize", web::post().to(authorize))
                     .route("/purchase", web::post().to(purchase))
-                    .route("/status", web::post().to(status)),
+                    .route("/status", web::post().to(status))
+                    .route("/health", web::post().to(health)),
             )
             // Add a health check endpoint
             .route(

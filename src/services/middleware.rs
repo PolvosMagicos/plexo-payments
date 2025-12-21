@@ -171,30 +171,33 @@ where
             }
 
             // Strict rate limiting
-            let service_id = &config.service_name;
-            let mut entry = config
-                .rate_limit
-                .storage
-                .entry(service_id.to_string())
-                .or_insert((0, Instant::now()));
+            {
+                let service_id = &config.service_name;
 
-            let (count, last_request) = &mut *entry;
-            let now = Instant::now();
+                let mut entry = config
+                    .rate_limit
+                    .storage
+                    .entry(service_id.to_string())
+                    .or_insert((0, Instant::now()));
 
-            if now.duration_since(*last_request) >= config.rate_limit.window {
-                *count = 0;
-                *last_request = now;
+                let (count, last_request) = &mut *entry;
+                let now = Instant::now();
+
+                if now.duration_since(*last_request) >= config.rate_limit.window {
+                    *count = 0;
+                    *last_request = now;
+                }
+
+                if *count >= config.rate_limit.max_requests {
+                    return Ok(create_service_error_response(
+                        req,
+                        StatusCode::TOO_MANY_REQUESTS,
+                        "Service rate limit exceeded",
+                    ));
+                }
+
+                *count += 1;
             }
-
-            if *count >= config.rate_limit.max_requests {
-                return Ok(create_service_error_response(
-                    req,
-                    StatusCode::TOO_MANY_REQUESTS,
-                    "Service rate limit exceeded",
-                ));
-            }
-
-            *count += 1;
 
             // Authentication successful, proceed with request
             let res = service.call(req).await?;
