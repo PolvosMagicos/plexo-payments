@@ -46,10 +46,11 @@ static HTTP_CLIENT: Lazy<Client> = Lazy::new(|| {
     let tcp_keepalive = env_duration("PLEXO_TCP_KEEPALIVE_MS", 30_000);
 
     Client::builder()
+        .use_rustls_tls()
         .http1_only() // WCF .svc endpoints can be flaky on HTTP/2
         .connect_timeout(connect_timeout)
         .tcp_keepalive(Some(tcp_keepalive))
-        .pool_max_idle_per_host(8)
+        .pool_max_idle_per_host(0)
         .build()
         .expect("failed to build reqwest client")
 });
