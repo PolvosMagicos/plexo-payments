@@ -100,7 +100,7 @@ fn backoff_delay_ms(attempt: u32, base_ms: u64, max_ms: u64) -> u64 {
 pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
     url: &str,
     payload: &T,
-    attempt_timeout: Duration,
+    _attempt_timeout: Duration,
     max_retries: u32,
 ) -> Result<reqwest::Response, PlexoServiceError> {
     let base_backoff = env_u64("PLEXO_BACKOFF_BASE_MS", 250);
@@ -110,15 +110,23 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
     let mut attempt: u32 = 0;
 
     loop {
-        let res = client
-            .post(url)
-            .timeout(attempt_timeout)
-            .json(payload)
-            .send()
-            .await;
+        println!(
+            "[HTTP] attempt={} about to build request to {}",
+            attempt, url
+        );
+
+        let req = client.post(url).json(payload);
+        println!("[HTTP] request built");
+
+        let fut = req.send();
+        println!("[HTTP] send() future created");
+
+        let res = fut.await;
+        println!("[HTTP] send() future resolved");
 
         match res {
             Ok(rsp) => {
+                println!("[HTTP] response headers received, status={}", rsp.status());
                 let status = rsp.status();
                 if status.is_success() {
                     return Ok(rsp);
@@ -134,8 +142,7 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
                 return Err(PlexoServiceError::HttpStatusError(status));
             }
             Err(e) => {
-                println!("error status: ");
-                println!("{e}");
+                println!("[HTTP] send() error: {e}");
 
                 let is_timeout = e.is_timeout();
                 let retryable = should_retry_error(&e);
@@ -279,7 +286,7 @@ pub fn debug_purchase_status(v: &Value) {
 }
 
 pub fn debug_outgoing_response<T: Serialize>(label: &str, body: &T) {
-    match serde_json::to_string_pretty(body) {
+    match serde_json::to_string(body) {
         Ok(pretty) => println!("📤 Outgoing response ({label}):\n{pretty}"),
         Err(e) => println!("📤 Outgoing response ({label}) - failed to serialize: {e}"),
     }
