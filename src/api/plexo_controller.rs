@@ -56,11 +56,11 @@ pub async fn authorize(request: web::Json<AuthorizationRequest>) -> ActixResult<
 }
 
 pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpResponse> {
+    println!("=== PURCHASE START ===");
     println!(
         "tokio runtime? {}",
         tokio::runtime::Handle::try_current().is_ok()
     );
-    info!("Received payment request");
 
     let payment_req = request.into_inner();
 
@@ -68,28 +68,44 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
     let meta_reference = payment_req.Request.ClientReferenceId.clone();
     let client_name = payment_req.Client.clone(); // grab before moving payment_req
 
-    let handle =
-        tokio::spawn(async move { plexo_service::send_payment_request(payment_req).await });
+    // Add a heartbeat task to prove the runtime is still working
+    let heartbeat = tokio::spawn(async {
+        for i in 0..20 {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            println!("💓 Heartbeat {i}");
+        }
+    });
 
-    // ✅ grab abort handle BEFORE select (so no “moved value” problem)
+    println!("=== SPAWNING PAYMENT TASK ===");
+    let handle = tokio::spawn(async move {
+        println!("=== INSIDE PAYMENT TASK ===");
+        plexo_service::send_payment_request(payment_req).await
+    });
+
     let abort = handle.abort_handle();
 
+    println!("=== ENTERING SELECT ===");
     let purchase_res: Result<Value, PlexoServiceError> = tokio::select! {
         joined = handle => {
+            println!("=== SELECT: HANDLE COMPLETED ===");
+            heartbeat.abort();
             match joined {
-                Ok(inner) => inner, // inner: Result<Value, PlexoServiceError>
+                Ok(inner) => inner,
                 Err(join_err) => {
                     println!("join error: {join_err}");
-                    Err(PlexoServiceError::Timeout) // or add JoinError variant if you want
+                    Err(PlexoServiceError::Timeout)
                 }
             }
         }
         _ = sleep(Duration::from_secs(12)) => {
+            println!("=== SELECT: TIMEOUT BRANCH ===");
             println!("⏱ purchase timed out (controller) -> aborting purchase task and falling back to status");
+            heartbeat.abort();
             abort.abort();
             Err(PlexoServiceError::Timeout)
         }
     };
+    println!("=== SELECT COMPLETED ===");
 
     match purchase_res {
         Ok(raw_purchase) => {

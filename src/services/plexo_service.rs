@@ -63,6 +63,23 @@ pub async fn send_authorization_request(
 pub async fn send_payment_request(
     payment_request: PaymentRequest,
 ) -> Result<Value, PlexoServiceError> {
+    println!("=== SEND_PAYMENT_REQUEST START ===");
+
+    // Test: does a simple HTTP call work?
+    let test_client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+
+    println!("=== TESTING SIMPLE HTTP CALL ===");
+    let test_result = tokio::time::timeout(
+        Duration::from_secs(3),
+        test_client.get("https://httpbin.org/delay/1").send(),
+    )
+    .await;
+
+    println!("=== TEST RESULT: {:?} ===", test_result.is_ok());
+
     let mut request_value = json!(payment_request);
     clean_nulls(&mut request_value);
     println!("payment request: {request_value}");
