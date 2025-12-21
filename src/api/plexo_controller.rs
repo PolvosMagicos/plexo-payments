@@ -79,7 +79,6 @@ pub async fn purchase(request: web::Json<PaymentRequest>) -> ActixResult<HttpRes
     let meta_reference = payment_req.Request.ClientReferenceId.clone();
     let client_name = payment_req.Client.clone();
 
-    // ✅ NO spawn, NO oneshot
     match plexo_service::send_payment_request(payment_req).await {
         Ok(raw_purchase) => {
             debug_purchase_status(&raw_purchase);

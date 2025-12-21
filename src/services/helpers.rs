@@ -137,7 +137,6 @@ pub async fn post_json_with_max_retries<T: Serialize + ?Sized>(
             attempt_timeout
         );
 
-        // ✅ HARD timeout around send()
         let res = timeout(attempt_timeout, fut)
             .await
             .map_err(|_| PlexoServiceError::Timeout)?;
