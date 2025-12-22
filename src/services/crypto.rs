@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex, Once};
 use tempfile::NamedTempFile;
 use thiserror::Error;
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug)]
 pub enum CryptoError {
     #[error("Failed to initialize crypto service: {0}")]
@@ -131,12 +132,11 @@ impl CryptoService {
     }
 
     // Sort keys alphabetically and handle nulls according to Plexo requirements
-    fn canonize_json(&self, value: &Value) -> Result<String, CryptoError> {
+    fn canonize_json(value: &Value) -> Result<String, CryptoError> {
         match value {
             Value::Object(map) => {
                 let mut result = String::from("{");
 
-                // Sort keys alphabetically
                 let mut keys: Vec<&String> = map.keys().collect();
                 keys.sort();
 
@@ -145,7 +145,6 @@ impl CryptoService {
                 for key in keys {
                     let val = &map[key];
 
-                    // Skip null values completely as per Plexo requirements
                     if val.is_null() {
                         continue;
                     }
@@ -155,50 +154,14 @@ impl CryptoService {
                     }
                     is_first = false;
 
-                    // Add key
                     result.push('"');
                     result.push_str(key);
                     result.push('"');
                     result.push(':');
 
-                    // Add value (recursively canonized)
                     let canonized_value = match val {
-                        Value::Object(_) => self.canonize_json(val)?,
-                        Value::Array(arr) => {
-                            let mut array_result = String::from("[");
-                            let mut is_first_item = true;
-
-                            for item in arr {
-                                // Skip null array items
-                                if item.is_null() {
-                                    continue;
-                                }
-
-                                if !is_first_item {
-                                    array_result.push(',');
-                                }
-                                is_first_item = false;
-
-                                // Recursively canonize array items
-                                match item {
-                                    Value::Object(_) => {
-                                        array_result.push_str(&self.canonize_json(item)?)
-                                    }
-                                    Value::Array(_) => {
-                                        array_result.push_str(&self.canonize_json(item)?)
-                                    }
-                                    Value::String(s) => {
-                                        array_result.push_str(&format!("\"{}\"", s))
-                                    }
-                                    _ => array_result.push_str(&item.to_string()),
-                                }
-                            }
-
-                            array_result.push(']');
-                            array_result
-                        }
+                        Value::Object(_) | Value::Array(_) => Self::canonize_json(val)?,
                         Value::String(s) => format!("\"{}\"", s),
-                        // For numbers, booleans, etc. - use direct string representation without quotes
                         _ => val.to_string(),
                     };
 
@@ -208,27 +171,30 @@ impl CryptoService {
                 result.push('}');
                 Ok(result)
             }
+
             Value::Array(arr) => {
                 let mut result = String::from("[");
                 let mut is_first = true;
 
-                for item in arr {
+                for item in arr.iter().filter(|v| !v.is_null()) {
                     if !is_first {
                         result.push(',');
                     }
                     is_first = false;
 
-                    match item {
-                        Value::Object(_) => result.push_str(&self.canonize_json(item)?),
-                        Value::Array(_) => result.push_str(&self.canonize_json(item)?),
-                        Value::String(s) => result.push_str(&format!("\"{}\"", s)),
-                        _ => result.push_str(&item.to_string()),
-                    }
+                    let part = match item {
+                        Value::Object(_) | Value::Array(_) => Self::canonize_json(item)?,
+                        Value::String(s) => format!("\"{}\"", s),
+                        _ => item.to_string(),
+                    };
+
+                    result.push_str(&part);
                 }
 
                 result.push(']');
                 Ok(result)
             }
+
             _ => Ok(value.to_string()),
         }
     }
@@ -245,7 +211,7 @@ impl CryptoService {
         });
 
         // Canonize the JSON
-        let canonized_json = self.canonize_json(&object_to_sign)?;
+        let canonized_json = Self::canonize_json(&object_to_sign)?;
 
         info!("Canonized JSON: {}", canonized_json);
 
@@ -271,12 +237,12 @@ impl CryptoService {
         let (signature, expiration) = self.sign_payload(payload)?;
 
         Ok(SignedRequest {
-            Object: SignedObject {
-                Fingerprint: self.fingerprint.clone(),
-                Object: payload.clone(),
-                UTCUnixTimeExpiration: expiration,
+            object: SignedObject {
+                fingerprint: self.fingerprint.clone(),
+                object: payload.clone(),
+                utc_unix_time_expiration: expiration,
             },
-            Signature: signature,
+            signature,
         })
     }
 }

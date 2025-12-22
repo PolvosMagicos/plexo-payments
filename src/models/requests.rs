@@ -3,87 +3,102 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct AuthorizationRequest {
-    pub Client: String,
-    pub Request: AuthorizationRequestData,
+    pub client: String,
+    pub request: AuthorizationRequestData,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct AuthorizationRequestData {
     #[serde(rename = "Type")]
     pub request_type: i32,
-    pub MetaReference: String,
-    pub Action: i32,
-    pub RedirectUri: String,
-    pub OptionalCommerceId: Option<i32>,
-    pub ClientInformation: ClientInformation,
-    pub OptionalMetadata: Option<String>,
-    pub LimitIssuers: Option<Vec<String>>,
-    pub WebFormSettings: Option<serde_json::Value>,
-    pub ExtendableInstrumentToken: Option<String>,
-    pub DoNotUseCallback: Option<bool>,
-    pub LimitBanks: Option<Vec<String>>,
-    pub PromotionInfoIssuers: Option<serde_json::Value>,
+
+    pub meta_reference: String,
+    pub action: i32,
+    pub redirect_uri: String,
+
+    pub optional_commerce_id: Option<i32>,
+    pub client_information: ClientInformation,
+    pub optional_metadata: Option<String>,
+    pub limit_issuers: Option<Vec<String>>,
+    pub web_form_settings: Option<serde_json::Value>,
+    pub extendable_instrument_token: Option<String>,
+    pub do_not_use_callback: Option<bool>,
+    pub limit_banks: Option<Vec<String>>,
+    pub promotion_info_issuers: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct ClientInformation {
-    pub Name: String,
-    pub Address: Option<String>,
-    pub Email: Option<String>,
-    pub Cellphone: Option<String>,
-    pub Identification: Option<String>,
-    pub IdentificationType: Option<String>,
+    pub name: String,
+    pub address: Option<String>,
+    pub email: Option<String>,
+    pub cellphone: Option<String>,
+    pub identification: Option<String>,
+    pub identification_type: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct PaymentRequest {
-    pub Client: String,
-    pub Request: PaymentRequestData,
+    pub client: String,
+    pub request: PaymentRequestData,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct PaymentRequestData {
-    pub ClientReferenceId: String,
-    pub CurrencyId: i32,
-    pub FinancialInclusion: FinancialInclusion,
-    pub Installments: i32,
-    pub Items: Vec<PaymentItem>,
-    pub PaymentInstrumentInput: PaymentInstrumentInput,
-    pub OptionalCommerceId: Option<i32>,
-    pub LoyaltyProgramAmount: Option<LosslessNumber>,
-    pub OptionalInstrumentFields: Option<HashMap<String, String>>,
-    pub CommerceReserveExpirationInSeconds: Option<i32>,
-    pub ThreeDSReferenceId: Option<String>,
+    pub client_reference_id: String,
+    pub currency_id: i32,
+    pub financial_inclusion: FinancialInclusion,
+    pub installments: i32,
+    pub items: Vec<PaymentItem>,
+    pub payment_instrument_input: PaymentInstrumentInput,
+
+    pub optional_commerce_id: Option<i32>,
+    pub loyalty_program_amount: Option<LosslessNumber>,
+    pub optional_instrument_fields: Option<HashMap<String, String>>,
+    pub commerce_reserve_expiration_in_seconds: Option<i32>,
+    pub three_ds_reference_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct FinancialInclusion {
-    pub BilledAmount: LosslessNumber,
-    pub InvoiceNumber: Option<i32>,
-    pub TaxedAmount: LosslessNumber,
+    pub billed_amount: LosslessNumber,
+    pub invoice_number: Option<i32>,
+    pub taxed_amount: LosslessNumber,
+
     #[serde(rename = "Type")]
     pub inclusion_type: i32,
-    pub VATAmount: Option<LosslessNumber>,
+
+    pub vat_amount: Option<LosslessNumber>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct PaymentItem {
-    pub Amount: LosslessNumber,
-    pub ClientItemReferenceId: String,
+    pub amount: LosslessNumber,
+    pub client_item_reference_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct PaymentInstrumentInput {
-    pub InstrumentToken: String,
-    pub UseExtendedClientCreditIfAvailable: bool,
-    pub OptionalFields: Option<HashMap<String, String>>,
-    pub InstrumentData: Option<InstrumentData>,
+    pub instrument_token: String,
+    pub use_extended_client_credit_if_available: bool,
+    pub optional_fields: Option<HashMap<String, String>>,
+    pub instrument_data: Option<InstrumentData>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct InstrumentData {
-    pub Issuer: Option<String>,
+    pub issuer: Option<String>,
+
     #[serde(flatten)]
     pub additional_data: Option<HashMap<String, serde_json::Value>>,
 }
@@ -100,6 +115,7 @@ pub struct StatusRequest {
 pub struct ReferenceRequest {
     #[serde(rename = "Type")]
     pub reference_type: ReferenceType,
+
     pub meta_reference: String,
 }
 

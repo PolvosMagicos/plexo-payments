@@ -1,16 +1,18 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct SignedRequest {
-    pub Object: SignedObject,
-    pub Signature: String,
+    pub object: SignedObject,
+    pub signature: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
 pub struct SignedObject {
-    pub Fingerprint: String,
-    pub Object: serde_json::Value,
-    pub UTCUnixTimeExpiration: i64,
+    pub fingerprint: String,
+    pub object: serde_json::Value,
+    pub utc_unix_time_expiration: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
